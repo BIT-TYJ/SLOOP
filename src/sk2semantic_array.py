@@ -3,6 +3,7 @@ import numpy as np
 import open3d as o3d
 from os import listdir
 from matplotlib import colormaps
+from typing import Tuple
 import os
 
 
@@ -28,9 +29,8 @@ class SKPreprocess:
                 f"{self.config_['seq_list'][self.curr_seq_idx_]:02d}",
             ]
         )
-        
 
-    def get_idx_and_seq_path(self, seq: int, frame_idx: int) -> (str, int):
+    def get_idx_and_seq_path(self, seq: int, frame_idx: int) -> Tuple[str, int]:
         self.update_seq_path()
         
         curr_seq_path = self.curr_seq_path_
@@ -51,7 +51,7 @@ class SKPreprocess:
 
     def load_data(
         self, curr_seq_path: str, curr_idx: int
-    ) -> (np.ndarray, np.ndarray, np.ndarray):
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         
         frame_points = np.fromfile(
             "/".join([curr_seq_path, "velodyne", f"{curr_idx:06d}.bin"]),
@@ -139,7 +139,7 @@ class SKPreprocess:
 
     def get_clustered_semantic_arary(
         self, seq: int = None, frame_idx: int = None
-    ) -> (np.ndarray, list, list, np.ndarray):
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         curr_seq_path, curr_idx = self.get_idx_and_seq_path(seq, frame_idx)
         frame_points, frame_sems, frame_insts = self.load_data(curr_seq_path, curr_idx)
         # 提取地面法向量
@@ -251,6 +251,12 @@ class SKPreprocess:
             np.array(inst_semantic_value_list),         #inst_semantic_list
             ground_model[:3]
         )
+    
+    def get_curr_seq(self):
+        return self.config_['seq_list'][self.curr_seq_idx_]
+    
+    def get_curr_seq_path(self):
+        return self.curr_seq_path_
 
 
 if __name__ == "__main__":

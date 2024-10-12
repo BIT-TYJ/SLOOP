@@ -1,11 +1,13 @@
 import numpy as np
 import open3d as o3d
+import yaml
 import pickle
 import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
 from pathlib import Path
+from typing import Tuple
 
 
 def list2pc(li):
@@ -52,7 +54,7 @@ def get_ground_truth_tf(src_idx, que_idx, gt_cam_tf_arr, Tr, Tr_inv):
     return Tr_inv @ np.linalg.inv(gt_cam_tf_arr[src_idx]) @ gt_cam_tf_arr[que_idx] @ Tr
 
 
-def get_pose_error(tf_gt, tf, is_2d=False) -> tuple[np.ndarray, float]:
+def get_pose_error(tf_gt, tf, is_2d=False) -> Tuple[np.ndarray, float]:
     def get_yaw_from_tf(tf):
         return np.arctan2(tf[1, 0], tf[0, 0])
 
@@ -81,8 +83,12 @@ def get_non_outlier_indices(data):
 if __name__ == "__main__":
     # evaluate the pose estimation result
 
-    DATASET_PATH = Path(__file__).parent / ".." / "data/dataset"
-    SEQ_LIST = [0, 2, 5, 6, 7, 8]
+    config = yaml.load(
+        (Path(__file__).parent / "../config/sk_preprocess.yaml").read_text(),
+        Loader=yaml.FullLoader
+    )
+    DATASET_PATH = Path(config["dataset_path"])
+    SEQ_LIST = config["seq_list"]
 
     # Load data
     seq_trans_data = dict()
@@ -95,7 +101,7 @@ if __name__ == "__main__":
     use_3d = False
     for seq in SEQ_LIST:
         seq_path = DATASET_PATH / f"sequences/{seq:02d}"
-        with open(Path(__file__).parent / f"../data/icp_data/{seq:02d}.pkl", "rb") as f:
+        with open(Path(__file__).parent / f"../data/icp_data/seq_{seq}_icp_result.pkl", "rb") as f:
             pair_data_list = pickle.load(f)
         gt_cam_tf_arr = get_cam_transform_arr(seq_path)
         pose_error_list = []

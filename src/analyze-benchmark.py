@@ -1,7 +1,9 @@
 # -*- coding:UTF-8 -*-
-import re
+from pathlib import Path
 
 # precision_GM.append(1) ; recall_GM.append(0)                  
+
+LOG_FILE_NAME = ""
 
 pos_neg = []
 
@@ -17,65 +19,65 @@ def subStrIndex(substr,str):
 def get_score_from_file_GM_new():   
     scores = []
     scores_num = []
-    filename = "../data/log/07_neg100_2024-05-28-May-05-1716892205ours.txt"
-    # filename = "../data/log/rthetafai=0.5 2 2/07/07-neg-100.txt"
+    filepath = Path(__file__).parent / "../data/log/" / LOG_FILE_NAME
 
     less_20_list = []
-    with open(filename, 'r') as file:
-        lines = file.readlines()
-        i = 0
-        min_pos = 1000
-        position_1 = []
-        numbers = []
-        max_neg = 0
-        while i < len(lines):
-            if i + 3 < len(lines):
-                
-                
-                # print(lines[i])
-                p1 = float(lines[i + 1].strip().split()[1])
-                p2 = float(lines[i + 2].strip().split()[1])
-                p3 = float(lines[i + 3].strip().split()[1])
-                number_1 = int(lines[i].strip().split()[0])
-                number_2 = int(lines[i].strip().split()[1])
-                #src_vertexs_num = len(frames_vertexs[number_1])
-                #query_vertexs_num = len(frames_vertexs[number_2])
-                # if src_vertexs_num <20 and query_vertexs_num < 20:
-                #     less_20_list.append(number_1)
-                #     i += 4
-                #     continue
-                    # print("<20: ",i/4)
-                
-                flag = int(lines[i].strip().split()[2])
-                pos_neg.append(flag)
-                
-            if p1 < 0.5 or (p2 == 0 and p3 == 0):  
-                tem_final_score = 0
-                scores_num.append(0)
-            else:            
-                tem_final_score = p1  + p3  +p2
-                number_1 = int(lines[i].strip().split()[0])
-                number_2 = int(lines[i].strip().split()[1])
-                #src_vertexs_num = len(frames_vertexs[number_1])
-                #query_vertexs_num = len(frames_vertexs[number_2])
+    # with open(filename, 'r') as file:
+    #     lines = file.readlines()
+    lines = filepath.read_text().splitlines()
+    i = 0
+    min_pos = 1000
+    position_1 = []
+    numbers = []
+    max_neg = 0
+    while i < len(lines):
+        if i + 3 < len(lines):
             
-                scores_num.append(tem_final_score)
-                
-            if flag and  tem_final_score == 0:
-                pos_number_1 = int(lines[i].strip().split()[0])
-                pos_number_2 = int(lines[i].strip().split()[1])
-                position_1.append(len(scores_num)) 
-                numbers.append((pos_number_1,pos_number_2))
-            if flag==0 and max_neg < tem_final_score:
-                
-                
-                max_neg = tem_final_score
-                position_2 = len(scores_num)
-                neg_number_1 = int(lines[i].strip().split()[0])
-                neg_number_2 = int(lines[i].strip().split()[1])
-                #print(neg_number_1, neg_number_2, p1, p2 ,p3, len(frames_vertexs[neg_number_1]), len(frames_vertexs[neg_number_2]))
-                
-            i += 4
+            
+            # print(lines[i])
+            p1 = float(lines[i + 1].strip().split()[1])
+            p2 = float(lines[i + 2].strip().split()[1])
+            p3 = float(lines[i + 3].strip().split()[1])
+            number_1 = int(lines[i].strip().split()[0])
+            number_2 = int(lines[i].strip().split()[1])
+            #src_vertexs_num = len(frames_vertexs[number_1])
+            #query_vertexs_num = len(frames_vertexs[number_2])
+            # if src_vertexs_num <20 and query_vertexs_num < 20:
+            #     less_20_list.append(number_1)
+            #     i += 4
+            #     continue
+                # print("<20: ",i/4)
+            
+            flag = int(lines[i].strip().split()[2])
+            pos_neg.append(flag)
+            
+        if p1 < 0.5 or (p2 == 0 and p3 == 0):  
+            tem_final_score = 0
+            scores_num.append(0)
+        else:            
+            tem_final_score = p1  + p3  +p2
+            number_1 = int(lines[i].strip().split()[0])
+            number_2 = int(lines[i].strip().split()[1])
+            #src_vertexs_num = len(frames_vertexs[number_1])
+            #query_vertexs_num = len(frames_vertexs[number_2])
+        
+            scores_num.append(tem_final_score)
+            
+        if flag and  tem_final_score == 0:
+            pos_number_1 = int(lines[i].strip().split()[0])
+            pos_number_2 = int(lines[i].strip().split()[1])
+            position_1.append(len(scores_num)) 
+            numbers.append((pos_number_1,pos_number_2))
+        if flag==0 and max_neg < tem_final_score:
+            
+            
+            max_neg = tem_final_score
+            position_2 = len(scores_num)
+            neg_number_1 = int(lines[i].strip().split()[0])
+            neg_number_2 = int(lines[i].strip().split()[1])
+            #print(neg_number_1, neg_number_2, p1, p2 ,p3, len(frames_vertexs[neg_number_1]), len(frames_vertexs[neg_number_2]))
+            
+        i += 4
     # print("min(p1: ", min(p1_list))
     # import matplotlib.pyplot as plt
     # plt.plot([i for i in range(1,len(p1_list)+1)],p1_list)

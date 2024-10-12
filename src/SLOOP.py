@@ -1,28 +1,21 @@
 # -*- coding:UTF-8 -*-
-import copy
-# from multiprocessing import popen_spawn_win32
-import cv2
 import math
-import random
-import time, sys, os
-
-from ros import rosbag
-import roslib
-roslib.load_manifest('sensor_msgs')
-from sensor_msgs.msg import Image#, PointCloud2, PointField
-import sensor_msgs.point_cloud2 as pcl2
-
+import time
+import os
+import glob
+import pickle
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd
 from collections import Counter
-
+from tqdm import tqdm
+from pathlib import Path
 from mpl_toolkits.mplot3d import Axes3D
 from math import *
 from datetime import datetime
+import open3d as o3d
 
 from sk2semantic_array import SKPreprocess
-import open3d as o3d
+import pose_estimation
 
 dataset_is_scenenet_209 = 0
 dataset_is_semantic_kitti = 1
@@ -39,7 +32,7 @@ if dataset_is_scenenet_209 == 1:
     f_GM_information = open(f"{curr_path}/../data/log/{str_p}ours1.txt", "a+")
 if dataset_is_semantic_kitti == 1:
     curr_path = os.path.abspath(os.path.dirname(__file__))
-    f_GM_information = open(f"{curr_path}/../data/log/05_neg100_{str_p}ours.txt", "a+")
+    f_GM_information = open(f"{curr_path}/../data/log/neg100_{str_p}ours.txt", "a+")
     
 query_frame_origin = 0  #query the frame from this number   ：）
 if_search_specially_query_frame = 1 # whether select the start  query frame 
@@ -57,12 +50,13 @@ frames = []
 common_RGB_perceptions = []
 GM_switch = 1 #the switch for graph matching
 
+save_icp_result = 0 # if set to 1, only pairs that truly form a loop is considered
 
 #SSGM_thresholds
 max_two_stage_distance_thres = 3
 w1 =0.5 ;  w2 = 0.5
 first_threhold = 0.5  #the threshold of : the ratio of same semantics
-spatial_consistency_threhold = 0.3     #m   0.3
+spatial_consistency_threhold = 0.25     #m   0.3
 r_threshold = 0.5 #m  2
 theta_threshold = 2      #degree  8
 fai_threshold_1 = 2       #degree  8
@@ -70,7 +64,7 @@ fai_threshold_1 = 2       #degree  8
 distance_threshold = 15    #the distance threshold for measure the local features of selected vertex pairs
 # local_dis_feature_threshold_1 = 3  # threshold of the local distance features: 
 # local_dis_feature_threshold_2 = 5  # threshold of the local distance features
-local_semantic_feature_threshold_ = 0.95         #   0.95
+local_semantic_feature_threshold_ = 0.92         #   0.95
 angle_interval =3 # angle sample interval for selecting axes 
 
 vector_z_axis_src = [] ;  vector_x_axis_src = [] ;  vector_y_axis_src = []     #three axes
@@ -367,7 +361,7 @@ def show_vertexs_and_systems(vertexs,origin, z_axis, y_axis, x_axis, origin_2):
     
     # origin_geom = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5, origin=origin)
     axis_geom = o3d.geometry.LineSet()
- 
+
     extened_f =10
     axis_geom.points = o3d.utility.Vector3dVector([origin, origin + extened_f * x_axis, origin, origin + extened_f * y_axis, origin, origin + extened_f * z_axis])
     axis_geom.lines = o3d.utility.Vector2iVector([[0, 1], [2, 3], [4, 5]])
@@ -1097,13 +1091,9 @@ def main():
                                 first_remained_flag, common_RGB_perception) 
 
         elif debug == 0:
-            
             frames_vertexs = []; frames_local_sem_feature_lis = []; frame_local_sem_feature_class_lis = []; frames_normal = []
-            import glob
-            frame_number = len(glob.glob(os.path.join("/media/zhong/JIA/Temp/kitti/05/sequences/05/velodyne/", "*.bin")))
-            print(frame_number)
-            for frame in range(0,frame_number):
-                print(frame)
+            frame_number = len(glob.glob(os.path.join(f"{sk_preprocess.get_curr_seq_path()}/velodyne/", "*.bin")))
+            for frame in tqdm(range(0, frame_number), desc="Preprocessing"):
                 _, centers, semantics, normal = sk_preprocess.get_clustered_semantic_arary(0, frame)
                 vertexs = np.hstack([centers, semantics]).tolist()
                 frames_vertexs.append(vertexs)
@@ -1119,21 +1109,31 @@ def main():
                     local_sem_feature_lis.append(local_sem_feature_normalized); local_sem_feature_class_lis.append(local_sem_feature_class)
                 frames_local_sem_feature_lis.append(local_sem_feature_lis);  frame_local_sem_feature_class_lis.append(local_sem_feature_class_lis)
             
-            #
-            file_path = "pairs_kitti/neg_100_07.txt"  # Replace with your file path
-            with open(file_path, 'r') as file:
-                lines = file.readlines()
+
+            # if need icp result, then use pairs without false loops
+            file_path = Path(__file__).parent / "pairs_kitti" \
+                / f"neg_{0 if save_icp_result else 100}_{sk_preprocess.get_curr_seq():02d}.txt"
+            lines = file_path.read_text().splitlines()
+            # file_path = os.path.join(os.path.dirname(__file__), "pairs_kitti/neg_0_07.txt")  # Replace with your file path
+            # with open(file_path, 'r') as file:
+            #     lines = file.readlines()
+
             frame_pairs = []
             for line in lines:
                 line = line.strip()  # 
                 frame1, frame2, label = line.split()  # 
-                print(frame1, frame2, label)
+                # print(frame1, frame2, label)
                 frame1 = int(frame1.lstrip('0')) if frame1 != "000000" else 0  # 
                 frame2 = int(frame2.lstrip('0')) if frame2 != "000000" else 0  # 
                 label = int(label)  # 
                 frame_pairs.append((frame1, frame2, label))  # 
 
             
+            pair_data_list = []
+            if save_icp_result:
+                icp_data_path = os.path.join(os.path.dirname(__file__), '..', f'data/icp_data')
+                if not os.path.exists(icp_data_path):
+                    os.makedirs(icp_data_path)
             for index in range(len(frame_pairs)):
                 src_frame = frame_pairs[index][0]
                 query_frame = frame_pairs[index][1]
@@ -1158,9 +1158,31 @@ def main():
                                     src_frame, query_frame,
                                     src_normal, query_normal,
                                     first_remained_flag, common_RGB_perception) 
-                
-                
-                
+
+                if save_icp_result:
+                    tf_init = pose_estimation.transform_two_coordinate_system(
+                        z_axis_src, y_axis_src, x_axis_src, origin_src, origin_2_src,
+                        z_axis_query, y_axis_query, x_axis_query, origin_query, origin_2_query
+                    )
+                    tf_icp = pose_estimation.vertex_icp_2d(vertexs_src, V, tf_init)
+                    if save_icp_result:
+                        pair_data = {
+                            "src_vertex": vertexs_src,
+                            "que_vertex": V,
+                            "src_frame": src_frame,
+                            "que_frame": query_frame,
+                            "init_transform": tf_init,
+                            "icp_transform": tf_icp,
+                        }
+                        pair_data_list.append(pair_data) 
+
+            if save_icp_result:
+                with open(
+                    os.path.join(icp_data_path, f'seq_{sk_preprocess.get_curr_seq()}_icp_result.pkl'),
+                    'wb'
+                ) as file:
+                    pickle.dump(pair_data_list, file)
+
 if __name__ == "__main__":
     main()
 
